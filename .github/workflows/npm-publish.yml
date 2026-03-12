@@ -1,0 +1,437 @@
+// Admin credentials
+const ADMIN_EMAIL = 'ugochukwuoshogbo@gmail.com';
+const SUPPORT_EMAIL = 'ugochukwuoshogbo@gmail.com';
+
+// Initialize data structure
+function initializeData() {
+    if (!localStorage.getItem('brokerData')) {
+        localStorage.setItem('brokerData', JSON.stringify({
+            users: [],
+            deposits: [],
+            withdrawals: [],
+            transactions: []
+        }));
+    }
+}
+
+// Get all data
+function getData() {
+    return JSON.parse(localStorage.getItem('brokerData'));
+}
+
+// Save data
+function saveData(data) {
+    localStorage.setItem('brokerData', JSON.stringify(data));
+}
+
+// Generate unique ID
+function generateId() {
+    return 'ID_' + Math.random().toString(36).substr(2, 9).toUpperCase();
+}
+
+// REGISTRATION
+document.addEventListener('DOMContentLoaded', function() {
+    initializeData();
+
+    // Register form
+    const registerForm = document.getElementById('registerForm');
+    if (registerForm) {
+        registerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const fullname = document.getElementById('fullname').value;
+            const email = document.getElementById('email').value;
+            const country = document.getElementById('country').value;
+            const password = document.getElementById('password').value;
+            const confirm_password = document.getElementById('confirm_password').value;
+
+            if (password !== confirm_password) {
+                alert('Passwords do not match!');
+                return;
+            }
+
+            const data = getData();
+            
+            // Check if email already exists
+            if (data.users.some(user => user.email === email)) {
+                alert('Email already registered!');
+                return;
+            }
+
+            const newUser = {
+                id: generateId(),
+                fullname: fullname,
+                email: email,
+                country: country,
+                password: password,
+                investmentAmount: 0,
+                profitMargin: 0,
+                bonuses: 0,
+                registeredDate: new Date().toLocaleDateString()
+            };
+
+            data.users.push(newUser);
+            saveData(data);
+
+            alert('Registration successful! Please login.');
+            window.location.href = 'login.html';
+        });
+    }
+
+    // Login form
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('login_email').value;
+            const password = document.getElementById('login_password').value;
+
+            // Admin login
+            if (email === ADMIN_EMAIL) {
+                if (password === 'admin123') {
+                    localStorage.setItem('currentUser', JSON.stringify({
+                        email: email,
+                        isAdmin: true
+                    }));
+                    window.location.href = 'admin.html';
+                    return;
+                } else {
+                    alert('Invalid admin credentials!');
+                    return;
+                }
+            }
+
+            // User login
+            const data = getData();
+            const user = data.users.find(u => u.email === email && u.password === password);
+
+            if (user) {
+                localStorage.setItem('currentUser', JSON.stringify({
+                    id: user.id,
+                    email: user.email,
+                    fullname: user.fullname,
+                    isAdmin: false
+                }));
+                window.location.href = 'dashboard.html';
+            } else {
+                alert('Invalid email or password!');
+            }
+        });
+    }
+
+    // Dashboard
+    const userGreeting = document.getElementById('userGreeting');
+    if (userGreeting) {
+        loadDashboard();
+    }
+
+    // Admin Dashboard
+    if (document.getElementById('usersList')) {
+        loadAdminDashboard();
+    }
+
+    // Logout
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            localStorage.removeItem('currentUser');
+            window.location.href = 'index.html';
+        });
+    }
+
+    const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+    if (adminLogoutBtn) {
+        adminLogoutBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            localStorage.removeItem('currentUser');
+            window.location.href = 'index.html';
+        });
+    }
+
+    // Deposit form
+    const depositForm = document.getElementById('depositForm');
+    if (depositForm) {
+        depositForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            const amount = parseFloat(document.getElementById('depositAmount').value);
+
+            if (amount <= 0) {
+                alert('Please enter a valid amount!');
+                return;
+            }
+
+            const data = getData();
+            const user = data.users.find(u => u.id === currentUser.id);
+
+            if (user) {
+                const deposit = {
+                    id: generateId(),
+                    userId: user.id,
+                    amount: amount,
+                    date: new Date().toLocaleDateString(),
+                    status: 'Pending'
+                };
+
+                data.deposits.push(deposit);
+                data.transactions.push({
+                    type: 'Deposit',
+                    amount: amount,
+                    date: new Date().toLocaleDateString(),
+                    userId: user.id
+                });
+
+                saveData(data);
+
+                alert('Deposit request submitted! Awaiting admin approval.');
+                closeDepositModal();
+                loadDashboard();
+            }
+        });
+    }
+
+    // Withdrawal form
+    const withdrawalForm = document.getElementById('withdrawalForm');
+    if (withdrawalForm) {
+        withdrawalForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            const amount = parseFloat(document.getElementById('withdrawalAmount').value);
+
+            if (amount <= 0) {
+                alert('Please enter a valid amount!');
+                return;
+            }
+
+            const data = getData();
+            const user = data.users.find(u => u.id === currentUser.id);
+
+            if (user && user.investmentAmount >= amount) {
+                const withdrawal = {
+                    id: generateId(),
+                    userId: user.id,
+                    userName: user.fullname,
+                    amount: amount,
+                    date: new Date().toLocaleDateString(),
+                    status: 'Pending'
+                };
+
+                data.withdrawals.push(withdrawal);
+                data.transactions.push({
+                    type: 'Withdrawal Request',
+                    amount: amount,
+                    date: new Date().toLocaleDateString(),
+                    userId: user.id
+                });
+
+                saveData(data);
+
+                alert('Withdrawal request submitted! Awaiting admin approval.');
+                closeWithdrawalModal();
+                loadDashboard();
+            } else if (user && user.investmentAmount < amount) {
+                alert('Insufficient funds!');
+            }
+        });
+    }
+
+    // Fund form
+    const fundForm = document.getElementById('fundForm');
+    if (fundForm) {
+        fundForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const fundUserId = document.getElementById('fundUserId').value;
+            const fundAmount = parseFloat(document.getElementById('fundAmount').value);
+
+            if (fundAmount <= 0) {
+                alert('Please enter a valid amount!');
+                return;
+            }
+
+            const data = getData();
+            const user = data.users.find(u => u.id === fundUserId);
+
+            if (user) {
+                user.investmentAmount += fundAmount;
+                saveData(data);
+
+                alert(`Account funded successfully! Added $${fundAmount.toFixed(2)} to ${user.fullname}'s account.`);
+                closeFundModal();
+                loadAdminDashboard();
+            }
+        });
+    }
+});
+
+// Load Dashboard
+function loadDashboard() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    
+    if (!currentUser) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    const data = getData();
+    const user = data.users.find(u => u.id === currentUser.id);
+
+    if (!user) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    document.getElementById('userGreeting').textContent = `Welcome, ${user.fullname}!`;
+    document.getElementById('investmentAmount').textContent = `$${user.investmentAmount.toFixed(2)}`;
+    document.getElementById('profitMargin').textContent = `$${user.profitMargin.toFixed(2)}`;
+    document.getElementById('bonuses').textContent = `$${user.bonuses.toFixed(2)}`;
+
+    // Load transactions
+    const userTransactions = data.transactions.filter(t => t.userId === user.id);
+    const transactionsList = document.getElementById('transactionsList');
+    
+    if (userTransactions.length > 0) {
+        transactionsList.innerHTML = userTransactions.map(t => `
+            <div class="transaction-item">
+                <span class="transaction-type">${t.type}</span>
+                <span class="transaction-amount">$${t.amount.toFixed(2)} - ${t.date}</span>
+            </div>
+        `).join('');
+    }
+}
+
+// Load Admin Dashboard
+function loadAdminDashboard() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    
+    if (!currentUser || !currentUser.isAdmin) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    const data = getData();
+
+    // Update stats
+    document.getElementById('totalUsers').textContent = data.users.length;
+    
+    const totalDeposits = data.deposits.reduce((sum, d) => sum + d.amount, 0);
+    document.getElementById('totalDeposits').textContent = `$${totalDeposits.toFixed(2)}`;
+    
+    const pendingWithdrawals = data.withdrawals.filter(w => w.status === 'Pending').length;
+    document.getElementById('pendingWithdrawals').textContent = pendingWithdrawals;
+
+    // Load users list
+    const usersList = document.getElementById('usersList');
+    if (data.users.length > 0) {
+        usersList.innerHTML = data.users.map(user => `
+            <div class="user-item">
+                <div class="user-info">
+                    <div class="user-name">${user.fullname}</div>
+                    <div class="user-email">${user.email}</div>
+                    <div class="user-country">${user.country} | Investment: $${user.investmentAmount.toFixed(2)}</div>
+                </div>
+                <button class="btn-small" onclick="openFundModal('${user.id}')">Fund Account</button>
+            </div>
+        `).join('');
+    }
+
+    // Load withdrawals list
+    const withdrawalsList = document.getElementById('withdrawalsList');
+    const pendingWithdrawalsList = data.withdrawals.filter(w => w.status === 'Pending');
+    
+    if (pendingWithdrawalsList.length > 0) {
+        withdrawalsList.innerHTML = pendingWithdrawalsList.map(w => `
+            <div class="withdrawal-item">
+                <div class="withdrawal-info">
+                    <div class="withdrawal-user">${w.userName}</div>
+                    <div class="withdrawal-amount">Amount: $${w.amount.toFixed(2)}</div>
+                    <div class="withdrawal-status">Requested: ${w.date}</div>
+                </div>
+                <div>
+                    <button class="btn-small" onclick="approveWithdrawal('${w.id}')">Approve</button>
+                    <button class="btn-small" style="background: #e74c3c;" onclick="rejectWithdrawal('${w.id}')">Reject</button>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+// Modal functions
+function openDepositModal() {
+    document.getElementById('depositModal').style.display = 'block';
+}
+
+function closeDepositModal() {
+    document.getElementById('depositModal').style.display = 'none';
+    document.getElementById('depositForm').reset();
+}
+
+function openWithdrawalModal() {
+    document.getElementById('withdrawalModal').style.display = 'block';
+}
+
+function closeWithdrawalModal() {
+    document.getElementById('withdrawalModal').style.display = 'none';
+    document.getElementById('withdrawalForm').reset();
+}
+
+function openFundModal(userId) {
+    document.getElementById('fundUserModal').style.display = 'block';
+    document.getElementById('fundUserId').value = userId;
+}
+
+function closeFundModal() {
+    document.getElementById('fundUserModal').style.display = 'none';
+    document.getElementById('fundForm').reset();
+}
+
+// Approve withdrawal
+function approveWithdrawal(withdrawalId) {
+    const data = getData();
+    const withdrawal = data.withdrawals.find(w => w.id === withdrawalId);
+    const user = data.users.find(u => u.id === withdrawal.userId);
+
+    if (user && user.investmentAmount >= withdrawal.amount) {
+        user.investmentAmount -= withdrawal.amount;
+        withdrawal.status = 'Approved';
+
+        saveData(data);
+        alert(`Withdrawal of $${withdrawal.amount.toFixed(2)} approved for ${withdrawal.userName}`);
+        loadAdminDashboard();
+    }
+}
+
+// Reject withdrawal
+function rejectWithdrawal(withdrawalId) {
+    const data = getData();
+    const withdrawal = data.withdrawals.find(w => w.id === withdrawalId);
+
+    if (withdrawal) {
+        withdrawal.status = 'Rejected';
+        saveData(data);
+        alert(`Withdrawal request rejected for ${withdrawal.userName}`);
+        loadAdminDashboard();
+    }
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    let modal = document.getElementById('depositModal');
+    if (modal && event.target === modal) {
+        modal.style.display = 'none';
+    }
+
+    modal = document.getElementById('withdrawalModal');
+    if (modal && event.target === modal) {
+        modal.style.display = 'none';
+    }
+
+    modal = document.getElementById('fundUserModal');
+    if (modal && event.target === modal) {
+        modal.style.display = 'none';
+    }
+}
